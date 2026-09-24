@@ -1,0 +1,45 @@
+name: owner-staging-deployment
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      fail_before_deploy:
+        description: Deliberately fail this disposable deployment
+        required: true
+        default: false
+        type: boolean
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: disposable-github-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deliberate bounded failure
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.fail_before_deploy }}
+        run: exit 29
+      - name: Build exact static artifact
+        run: |
+          set -eu
+          mkdir _site
+          cp site/index.html _site/index.html
+          sha256sum _site/index.html > _site/application-artifact.sha256
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy immutable artifact
+        id: deployment
+        uses: actions/deploy-pages@v4
